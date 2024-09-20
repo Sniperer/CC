@@ -1,6 +1,6 @@
 ### How to run
 ```shell
-python3 handin2.py
+python3 handin3.py
 ```
 All test sets are included in our code which can be found in function ```test```.
 
@@ -9,14 +9,13 @@ We use encoding as follows.
 
 | blood type | number |
 | --- | --- |
-| O- | 0 |
-| O+ | 1 |
-| A- | 2 |
-| A+ | 3 |
-| B- | 4 |
-| B+ | 5 |
-| AB- | 6 |
-| AB+ | 7 |
+| A- | 1,0,0 |
+| A+ | 1,0,1 |
+| AB- | 1,1,0 |
+| AB+ | 1,1,1 |
+| B- | 0,1,0 |
+| B+ | 0,1,1 |
+| O- | 0,0,0 |
+| O+ | 0,0,1 |
 
-Depend on protocol and api included in pdf, we code a python program.
-# CC
+We have detailed explain about how we implement our program in our code.
