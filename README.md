@@ -2,7 +2,7 @@
 ```shell
 python3 handin3.py
 ```
-All test sets are included in our code which can be found in function ```test```.
+All test sets are included in our code which can be found in function ```test```. Differently from previous assignment, we initialize a class ```circuit``` in ```func``` and call ```circuit.func``` to test.
 
 ### Implement
 We use encoding as follows.
