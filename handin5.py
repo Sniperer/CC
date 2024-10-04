@@ -14,17 +14,127 @@ type_to_num : Dict[str,int] = {
     "AB+":7
 }
 
-# truth table used in handin 1
-T: List[List[int]] = [
-    [1,0,0,0,0,0,0,0],
-    [1,1,0,0,0,0,0,0],
-    [1,0,1,0,0,0,0,0],
-    [1,1,1,1,0,0,0,0],
-    [1,0,0,0,1,0,0,0],
-    [1,1,0,0,1,1,0,0],
-    [1,0,1,0,1,0,1,0],
-    [1,1,1,1,1,1,1,1],
-]
+# Encode type of blood to the code we design in Assignment 1
+encoder : Dict[str, list] = {
+    "A-" : [1,0,0],
+    "A+" : [1,0,1],
+    "AB-": [1,1,0],
+    "AB+": [1,1,1],
+    "B-" : [0,1,0],
+    "B+" : [0,1,1],
+    "O-" : [0,0,0],
+    "O+" : [0,0,1]
+}
+
+def G(a: int, b: int, i: int) -> int:
+    g = hashlib.sha256()
+    # print(a, b, i)
+    g.update(b.to_bytes((b.bit_length() + 7) // 8, byteorder='big'))
+    g.update(a.to_bytes((a.bit_length() + 7) // 8, byteorder='big'))
+    g.update(i.to_bytes((i.bit_length() + 7) // 8, byteorder='big'))
+    hashed_int = int(g.hexdigest(), 16)
+    return hashed_int
+
+
+class Generator:
+    def __init__(self):
+        self.T: int = 11
+        self.Ks: List[List[int]] = [[random.randint(
+            0, (1 << 128) - 1), random.randint(0, (1 << 128) - 1)] for _ in range(self.T + 1)]
+        self.Ls: List[int] = [-1] * (self.T + 1)
+        self.Rs: List[int] = [-1] * (self.T + 1)
+        self.Cs: List[List[int]] = [[-1 for _ in range(4)] for _ in range(self.T + 1)]
+
+    def genFun(self, i: int) -> None:  # i-th gate
+        for a in (0, 1):
+            for b in (0, 1):
+                k = self.Ks[i][1 ^ ((1 ^ a)*b)]
+                k = k << 128
+                k = k ^ G(self.Ks[self.Ls[i]][a], self.Ks[self.Rs[i]][b], i)
+                self.Cs[i][a*2 + b] = k
+        random.shuffle(self.Cs[i])
+        #print(f"i:{i}, value: {self.Cs[i]}, genFun")
+
+    def genAnd(self, i: int) -> None:  # i-th gate
+        for a in (0, 1):
+            for b in (0, 1):
+                k = self.Ks[i][a*b]
+                k = k << 128
+                k = k ^ G(self.Ks[self.Ls[i]][a], self.Ks[self.Rs[i]][b], i)
+                self.Cs[i][a*2 + b] = k
+        random.shuffle(self.Cs[i])
+        #print(f"i:{i}, value: {self.Cs[i]}, genAnd")
+        #print(f"i={8}, value: {self.Cs[8]}, genAnd")
+
+    def compute(self) -> None:
+        self.Ls[7] = 1
+        self.Ls[8] = 2
+        self.Ls[9] = 3
+        self.Ls[10] = 7
+        self.Ls[11] = 10
+        self.Rs[7] = 4
+        self.Rs[8] = 5
+        self.Rs[9] = 6
+        self.Rs[10] = 8
+        self.Rs[11] = 9
+        self.genFun(7)
+        self.genFun(8)
+        self.genFun(9)
+        self.genAnd(10)
+        self.genAnd(11)
+        return
+
+    def Circuit(self, A: int, B: int, C: int) -> Tuple[Tuple[List[int], List[int], List[List[int]]], List[int]]:
+        Y: List[int] = (self.Ks[4][A], self.Ks[5][B], self.Ks[6][C])
+        return (self.Ls, self.Rs, self.Cs), Y
+
+    def De(self) -> List[int]:
+        return self.Ks[11]
+
+    def X(self, A: int, B: int, C: int) -> List[int]:  # only used for debug
+        X: List[int] = (self.Ks[1][A], self.Ks[2][B], self.Ks[3][C])
+        return X
+
+def gen_F_and_Y(A: int, B: int, C: int) -> Tuple[Tuple[List[int], List[int], List[List[int]]], List[int]]:
+    g = Generator()
+    g.compute()
+    return g.Circuit(A, B, C)
+
+class Evaluator:
+    def __init__(self, X: Tuple[int, int, int], F: Tuple[list, list, List[list]], Y: Tuple[int, int, int]):
+        self.F = F
+        self.K = [-1] * 12
+        self.K[1] = X[0]
+        self.K[2] = X[1]
+        self.K[3] = X[2]
+        self.K[4] = Y[0]
+        self.K[5] = Y[1]
+        self.K[6] = Y[2]
+        return
+
+    def ev(self, i):
+        C = self.F[2][i]
+        # print(f"i:{i}, value: {C}, ev")
+        for c in C:
+            # print(f"i;{i}, l:{self.K[self.F[0][i]]}, r:{self.K[self.F[1][i]]}")
+            tmp = c ^ G(self.K[self.F[0][i]], self.K[self.F[1][i]], i)
+            #print(f"tmp:{tmp}")
+            if ((tmp >> 128) << 128) == tmp:
+                self.K[i] = (tmp >> 128)
+                return
+        assert 0, "NO 0^k value in Evaluator.ev()"
+
+    def Evulate(self):
+        for i in range(7, 12):  # all non-input gate
+            self.ev(i)
+        return self.K[11]
+
+def decrypt(d: List[int], Z: int):
+    if Z == d[0]:
+        return 0
+    if Z == d[1]:
+        return 1
+    return -1
 
 def millerRabin(n):
     if n < 3 or n % 2 == 0:
@@ -88,136 +198,71 @@ class EL:
         a = pow(a, self.p - 2, self.p)
         return (a*c[1])%self.p
     
-
-class generator:
-    def __init__(self):
-        self.T = 11
-        self.Ks = [[random.randint(0, (1 << 128) - 1), random.randint(0, (1 << 128) - 1)] for _ in range(self.T + 1)]        
-        self.Ls = [-1] * (self.T + 1)
-        self.Rs = [-1] * (self.T + 1)
-        self.Cs = [[-1,-1,-1,-1]]*(self.T + 1)
-
-    def G(a, b, i):
-        g = hashlib.sha256()
-        g.update(self.Ks[self.Ls[i]][a])
-        g.update(self.Ks[self.Rs[i]][b])
-        g.update(i)
-        hash_hex = g.hexdigest()
-        hashed_int = int(hashed_hex, 16)
-        return hashed_int
-        
-    def genFun(i):
-        for a in (0,1):
-            for b in (0,1):
-                k = self.Ks[i][1^((1^a)*b)]
-                k = k << 128
-                k = k^G(a, b, i)
-                self.Cs[i][a*2 + b] = k
-        random.shuffle(self.Cs[i])
-
-    def genAnd(i):
-        for a in (0,1):
-            for b in (0,1):
-                k = self.Ks[i][a*b]
-                k = k << 128
-                k = k^G(a,b,i)
-                self.Cs[i][a*2+b] = k
-        random.shuffle(self.Cs[i])
-        
-    def init(self):
-        self.Ls[7] = 1
-        self.Ls[8] = 2
-        self.Ls[9] = 3
-        self.Ls[10] = 7
-        self.Ls[11] = 10
-        self.Rs[7] = 4
-        self.Rs[8] = 5
-        self.Rs[9] = 6
-        self.Rs[10] = 8
-        self.Rs[11] = 9
-        self.genFun(7)
-        self.genFun(8)
-        self.genFun(9)
-        self.genAnd(10)
-        self.genAnd(11)
-
-    def Circuit(self, A, B, C):
-        Y = (self.Ks[4][A], self.Ks[5][B], self.Ks[6][C])
-        return (self.Ls, self.Rs, self.Cs), Y
-
-    def De(self):
-        return self.Ks[11]
-    
-class evaluator:
-    def __init__(self, X:Tuple[int,int,int], F:Tuple[list, list, List[list]], Y:Tuple[int,int,int]):
-        self.F = F
-        self.K = [-1] * 11
-        self.K[1] = X[0]
-        self.K[2] = X[1]
-        self.K[3] = X[2]
-        self.K[4] = Y[0]
-        self.K[5] = Y[1]
-        self.K[6] = Y[2]
-
-    def G(Ka, Kb, i):
-        g = hashlib.sha256()
-        g.update(Ka)
-        g.update(Kb)
-        g.update(i)
-        hash_hex = g.hexdigest()
-        hashed_int = int(hashed_hex, 16)
-        return hashed_int
-        
-    def ev(self, i):
-        C = self.F[2][i]
-        for c in C:
-            tmp = c^G(self.K[self.F[0][i]],self.K[self.F[1][i]],i)
-            if (tmp >> 128) << 128 == tmp:
-                self.K[i] = (tmp >> 128)
-                return
-        
-    def Evulate(self):
-        self.ev(7)
-        self.ev(8)
-        self.ev(9)
-        self.ev(10)
-        self.ev(11)
-        return self.K[11]
-
 class Alice:
-    def __init__(self, bloodtype, e):
-        self.bloodtype = bloodtype
+    def __init__(self, A, B, C, e):
+        self.A = A
+        self.B = B
+        self.C = C
         self.e = e
-        self.sec_key = random.randint(2, self.e.p - 2)
-        self.public_key = self.e.gen(self.sec_key)        
-        self.okeys = [self.e.Ogen(random.randint(2, self.e.p - 2)) for _ in range(2)]
-        self.okeys[bloodtype] = self.public_key
-
+        self.sec_key:List[int] = [random.randint(2, self.e.p - 2) for _ in range(3)]
+        self.public_key:List[Tuple[int,int]] = [self.e.gen(sk) for sk in self.sec_key]
+        self.okeys:List[List[Tuple[int,int]]] = [[self.e.Ogen(random.randint(2, self.e.p - 2)), self.e.Ogen(random.randint(2, self.e.p - 2))] for _ in range(3)]
+        self.okeys[0][A] = self.public_key[0]
+        self.okeys[1][B] = self.public_key[1]
+        self.okeys[2][C] = self.public_key[2]
+        
     # Send all keys to Bob
-    def choose(self) -> List[Tuple[int, int]]:
+    def choose(self) -> List[List[Tuple[int, int]]]:
         return self.okeys
 
     # Retrieve result from message
-    def retrieve(self, m:List[Tuple[int,int]]) -> int:
-        return self.e.dec(m[self.bloodtype], self.sec_key)
+    def retrieve(self, m:List[List[Tuple[int,int]]]) -> None:
+        self.X = [self.e.dec(m[0][self.A], self.sec_key[0]),
+                  self.e.dec(m[1][self.B], self.sec_key[1]),
+                  self.e.dec(m[2][self.C], self.sec_key[2])]
+
+    def evaluate_decrypt(self, F, Y, d) -> int:
+        self.ev = Evaluator(self.X, F, Y)
+        Z = self.ev.Evulate()
+        if Z == d[0]:
+            return 0
+        if Z == d[1]:
+            return 1
+        return -1
     
 class Bob:
-    def __init__(self, bloodtype, e):
-        self.bloodtype = bloodtype
-        self.candidates = [T[i][self.bloodtype] for i in range(2)]
+    def __init__(self, A, B, C, e):
+        self.A = A
+        self.B = B
+        self.C = C
         self.e = e
+        self.g = Generator()
+        self.g.compute()
+        self.candidates = [self.g.Ks[1],self.g.Ks[2],self.g.Ks[3]]
 
     # Transfer messages to Alice
-    def transfer(self, keys:List[Tuple[int, int]]) -> List[Tuple[int, int]]:
-        return [self.e.enc(random.randint(2, self.e.p - 2), self.candidates[i],keys[i]) for i in range(len(keys))]
+    def transfer(self, keys:List[List[Tuple[int, int]]]) -> List[List[Tuple[int, int]]]:
+        m = []
+        for j in range(3):
+            m.append([self.e.enc(random.randint(2, self.e.p - 2), self.candidates[j][i], keys[j][i]) for i in range(2)]) 
+        return m
+
+    def send_F_Y_d(self):
+        F, Y = self.g.Circuit(self.A, self.B, self.C)
+        return F, Y, self.g.De() 
 
 def func(x:str, y:str) -> int:
-    e = EL(128)
-    A = Alice(type_to_num[x], e)
-    B = Bob(type_to_num[y], e)
+    print(f"blood type of receive:{x}blood type of donor:{y}")
+    e = EL(258)
+    X = encoder[x]
+    Y = encoder[y]
+    A = Alice(X[0], X[1], X[2], e)
+    B = Bob(Y[0], Y[1], Y[2], e)
     m1 = A.choose()
     m2 = B.transfer(m1)
-    return A.retrieve(m2)
+    A.retrieve(m2)
+    F, Y, d = B.send_F_Y_d()
+    return A.evaluate_decrypt(F, Y, d)
 
     
 def test(func) -> None:
@@ -257,6 +302,7 @@ def test(func) -> None:
         for jt in blood_type:
             cnt = cnt + 1
             if func(it, jt) == ((it, jt) in correct_pair):
+                print("passed!")
                 pass_cnt += 1
                 continue
             else:
