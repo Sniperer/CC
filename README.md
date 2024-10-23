@@ -3,7 +3,7 @@ Assume $r_i \leq 2^R$, p is secret integer and n is the number of integers in pu
 
 For an add operation of $m_1 + 2*\sum_{i \in S_1} r_i$ and $m_2 + 2*\sum_{j \in S_2} r_j$, the upperbound of noise would be $2\sum_{n} r_i+r_j \leq 2\sum_{n} 2^{R+1} \leq 2n2^{R+1}$.
 
-For an multiplication of $m_1 + 2*\sum_{i \in S_1} r_i$ and $m_2 + 2*\sum_{j \in S_2} r_j$, the upperbound of noise would be $2(m_1 \sum_{S_1} r_i + m_2 \sum_{S_2} r_j + \sum_{S_1} \sum_{S_2} r_i*r_j) \leq 2(2*n*2^{R} + n^2*2^{2*R})$
+For an multiplication of $m_1 + 2*\sum_{i \in S_1} r_i$ and $m_2 + 2*\sum_{j \in S_2} r_j$, the upperbound of noise would be $2 (m_1 \sum_{S_1} r_i + m_2 \sum_{S_2} r_j + \sum_{S_1} \sum_{S_2} r_i*r_j) \leq 2(2*n*2^{R} + n^2*2^{2*R}) $ .
 
 ### How to run
 ```shell
